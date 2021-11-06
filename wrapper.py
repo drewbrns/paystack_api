@@ -1,7 +1,6 @@
 from typing import List, Any
 import json
 from utils.requests_retry_session import requests_retry_session
-
 from utils.parsers import parse_datetime
 
 
@@ -37,7 +36,7 @@ class PaystackAPI(object):
         dict: Payload of a customer on paystack_api
         """
         response = self._session.get(
-            f"{self._BASE_URL}/customer/{email_or_customer_code}", headers=_self._headers
+            f"{self._BASE_URL}/customer/{email_or_customer_code}", headers=self._headers
         )
         response.raise_for_status()
         content = response.json()
@@ -59,44 +58,44 @@ class PaystackAPI(object):
         content = response.json()
         return content.get("data", None)
 
-    def fetch_subaccounts(self, page=1, per_page=50):
+    def fetch_subaccounts(self, page: int = 1, limit: int = 50):
         """Fetch all subaccounts on paystack_api
 
         Parameters:
         page (int):
-        per_page (int):
+        limit (int):
 
         Returns:
         dict: List of subaccounts on paystack_api
         """
         response = self._session.get(
-            f"{self._BASE_URL}/subaccount?page={page}&per_page={per_page}",
+            f"{self._BASE_URL}/subaccount?page={page}&perPage={limit}",
             headers=self._headers,
         )
         response.raise_for_status()
         content = response.json()
-        return content.get("data", None)
+        return content.get("data", [])
 
     def fetch_subaccount(self, data):
         pass
 
-    def fetch_plans(self, page=1, per_page=50):
+    def fetch_plans(self, page: int = 1, limit: int = 50):
         """Fetch all plans on paystack_api
 
         Parameters:
         page (int):
-        per_page (int):
+        perPage (int):
 
         Returns:
         dict: List of plans on paystack_api
         """
 
         response = self._session.get(
-            f"{self._BASE_URL}/plan?page={page}&per_page={per_page}", headers=self._headers
+            f"{self._BASE_URL}/plan?page={page}&perPage={limit}", headers=self._headers
         )
         response.raise_for_status()
         content = response.json()
-        return content.get("data", None)
+        return content.get("data", [])
 
     def fetch_plan(self, plan_id_or_code):
         response = self._session.get(
@@ -104,7 +103,7 @@ class PaystackAPI(object):
         )
         response.raise_for_status()
         content = response.json()
-        return content.get("data", None)
+        return content.get("data", [])
 
     def create_subscription(
         self, customer_code, plan_code, authorization=None, start_date=None
@@ -120,26 +119,26 @@ class PaystackAPI(object):
         )
         response.raise_for_status()
         content = response.json()
-        return content.get("data", None)
+        return content.get("data", [])
 
-    def fetch_subscriptions(self, page=1, per_page=50):
+    def fetch_subscriptions(self, page: int = 1, limit: int = 50):
         """Fetch all subscriptions on paystack_api
 
         Parameters:
         page (int):
-        per_page (int):
+        perPage (int):
 
         Returns:
         dict: List of subscriptions on paystack_api
         """
 
         response = self._session.get(
-            f"{self._BASE_URL}/subscription?page={page}&per_page={per_page}",
+            f"{self._BASE_URL}/subscription?page={page}&perPage={limit}",
             headers=self._headers,
         )
         response.raise_for_status()
         content = response.json()
-        return content.get("data", None)
+        return content.get("data", [])
 
     def fetch_subscription(self, subscription_code):
         pass
@@ -155,7 +154,7 @@ class PaystackAPI(object):
             f"{self._BASE_URL}/bank?currency={currency}", headers=self._headers
         )
         response.raise_for_status()
-        return response.json()["data"]
+        return response.json().get("data", [])
 
     def resolve_account_number(self, account_number, bank_code):
         try:
@@ -202,9 +201,10 @@ class PaystackAPI(object):
         response.raise_for_status()
         return response.json()["data"]
 
-    def initialize_transaction(self, customer_email, amount):
-
-        payload = {"email": customer_email, "amount": amount, "subaccount": SUB_ACCOUNT}
+    def initialize_transaction(self, customer_email, amount, sub_account=None):
+        payload = {"email": customer_email, "amount": amount}
+        if sub_account:
+            payload["subaccount"] = sub_account
 
         response = self._session.post(
             f"{self._BASE_URL}/transaction/initialize",
@@ -219,7 +219,7 @@ class PaystackAPI(object):
         customer_email,
         channel,
         amount,
-        sub_account,
+        sub_account=None,
         currency="GHS",
         authorization_code=None,
         mobile_money=None,
@@ -228,8 +228,9 @@ class PaystackAPI(object):
             "email": customer_email,
             "amount": amount,
             "currency": currency,
-            "subaccount": sub_account,
         }
+        if sub_account:
+            payload["subaccount"] = sub_account
         url = "charge"
 
         if channel == "authorization_code":
@@ -246,22 +247,24 @@ class PaystackAPI(object):
         return response.json()
 
     def charge_authorization_code(
-        self, customer_email, amount, payment_token, currency="GHS"
+        self, customer_email, amount, payment_token, currency="GHS", sub_account=None
     ):
         return self._charge(
             customer_email=customer_email,
             channel="authorization_code",
             amount=amount,
             currency=currency,
+            sub_account=sub_account,
             authorization_code=payment_token,
         )
 
-    def charge_momo(self, customer_email, amount, payment_token, currency="GHS"):
+    def charge_momo(self, customer_email, amount, payment_token, currency="GHS", sub_account=None):
         return self._charge(
             customer_email=customer_email,
             channel="mobile_money",
             amount=amount,
             currency=currency,
+            sub_account=sub_account,
             mobile_money=payment_token,
         )
 
@@ -283,7 +286,7 @@ class PaystackAPI(object):
         response.raise_for_status()
         return response.json()["data"]
 
-    def check_charge(self, reference):
+    def check_charge(self, reference: str):
         response = self._session.get(
             f"{self._BASE_URL}/charge/{reference}", headers=self._headers
         )
@@ -291,16 +294,16 @@ class PaystackAPI(object):
         data = response.json()
         return data["data"]
 
-    def fetch_settlements(self, page=1, limit=25) -> List[dict[str, Any]]:
+    def fetch_settlements(self, page: int = 1, limit: int = 25) -> List[dict[str, Any]]:
         settlements = []
         response = self._session.get(
-            f"{self._BASE_URL}/settlement?page={page}&per_page={limit}",
+            f"{self._BASE_URL}/settlement?page={page}&perPage={limit}",
             headers=self._headers,
         )
         response.raise_for_status()
-        json = response.json()
-        data = json["data"]
-        pagination = json["meta"]
+        content = response.json()
+        data = content["data"]
+        pagination = content["meta"]
 
         settlements.extend(
             [
@@ -321,16 +324,16 @@ class PaystackAPI(object):
 
         return settlements
 
-    def fetch_settled_transaction_references(self, settlement_id, page=1, limit=10000):
+    def fetch_settled_transaction_references(self, settlement_id: int, page: int = 1, limit: int = 25) -> List[str]:
         references = []
         response = self._session.get(
-            f"{self._BASE_URL}/settlement/{settlement_id}/transactions?page={page}&per_page={limit}",
+            f"{self._BASE_URL}/settlement/{settlement_id}/transactions?page={page}&perPage={limit}",
             headers=self._headers,
         )
         response.raise_for_status()
-        json = response.json()
-        data = json["data"]
-        pagination = json["meta"]
+        content = response.json()
+        data = content["data"]
+        pagination = content["meta"]
 
         references.extend([t["reference"] for t in data])
 
